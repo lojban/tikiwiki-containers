@@ -1,0 +1,30 @@
+<%= "\n"*30 %>
+<%= "# YOU ARE IN THE WRONG PLACE" %>
+<%= "# YOU ARE IN THE WRONG PLACE use the ERB file" %>
+<%= "# YOU ARE IN THE WRONG PLACE" %>
+
+FROM tikiwiki/tikiwiki:21.x
+
+RUN chown -R www-data:www-data /var/www/html/img/wiki/ /var/www/html/img/wiki_up/  /var/www/html/modules/cache/ /var/www/html/temp/
+
+# mail
+RUN apt-get update
+RUN apt-get install -y msmtp msmtp-mta s-nail
+RUN ln -s /usr/bin/s-nail /usr/bin/mailx
+COPY misc/msmtprc /etc/msmtprc
+
+# images
+RUN mkdir -p /var/www/html/img/lojban/
+COPY misc/img_lojban/* /var/www/html/img/lojban/
+
+# PHP settings
+COPY misc/php.ini /usr/local/etc/php/conf.d/jbo-tikiwiki.ini
+
+# Lock the installer
+RUN php console.php installer:lock
+
+# Apache configs, including redirects and support for haproxy upstream
+RUN ln -s /etc/apache2/mods-available/remoteip.load /etc/apache2/mods-enabled/remoteip.load 
+COPY misc/httpd_tiki.conf /etc/apache2/conf-enabled/
+# Allow http://tiki.lojban.org/img/lojban/lojban_flag.ico to work
+RUN sed -r -i 's/\|png\|/|png|ico|/g' /var/www/html/img/.htaccess

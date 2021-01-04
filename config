@@ -1,0 +1,2 @@
+service=jbo-tikiwiki
+pod_args='-p 19580:80'

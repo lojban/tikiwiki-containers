@@ -1,0 +1,94 @@
+MariaDB [tiki]> select count(*) from users_groups;
++----------+
+| count(*) |
++----------+
+|    36425 |
++----------+
+1 row in set (0.000 sec)
+
+MariaDB [tiki]> select count(*) from users_usergroups;
++----------+
+| count(*) |
++----------+
+|    72921 |
++----------+
+1 row in set (0.000 sec)
+
+MariaDB [tiki]> select count(*) from users_users;
++----------+
+| count(*) |
++----------+
+|    36465 |
++----------+
+1 row in set (0.000 sec)
+
+CREATE TABLE IF NOT EXISTS users_users_backup_2010_01_03 LIKE users_users;
+INSERT users_users_backup_2010_01_03 SELECT * FROM users_users;
+
+CREATE TABLE IF NOT EXISTS users_usergroups_backup_2010_01_03 LIKE users_usergroups;
+INSERT users_usergroups_backup_2010_01_03 SELECT * FROM users_usergroups;
+
+CREATE TABLE IF NOT EXISTS users_groups_backup_2010_01_03 LIKE users_groups;
+INSERT users_groups_backup_2010_01_03 SELECT * FROM users_groups;
+
+CREATE TABLE IF NOT EXISTS tiki_pages_backup_2010_01_03 LIKE tiki_pages;
+INSERT tiki_pages_backup_2010_01_03 SELECT * FROM tiki_pages;
+
+delete from users_users where created > 1357027200;
+
+delete from users_users where lastlogin is null;
+
+MariaDB [tiki]> select count(*) from users_users;
++----------+
+| count(*) |
++----------+
+|     2312 |
++----------+
+1 row in set (0.000 sec)
+
+SELECT * FROM users_usergroups LEFT OUTER JOIN users_users ON (users_usergroups.userId = users_users.userId) WHERE users_users.userId IS NULL LIMIT 10;
+
+MariaDB [tiki]> SELECT count(*) FROM users_usergroups LEFT OUTER JOIN users_users ON (users_usergroups.userId = users_users.userId) WHERE users_users.userId IS NULL;
++----------+
+| count(*) |
++----------+
+|    68304 |
++----------+
+1 row in set (0.090 sec)
+
+MariaDB [tiki]> delete users_usergroups.* FROM users_usergroups LEFT OUTER JOIN users_users using(userId) WHERE users_users.userId IS NULL;
+Query OK, 68304 rows affected (0.858 sec)
+
+
+MariaDB [tiki]> select count(*) from users_usergroups;
++----------+
+| count(*) |
++----------+
+|     4617 |
++----------+
+1 row in set (0.001 sec)
+
+SELECT * FROM users_groups LEFT OUTER JOIN users_usergroups USING(groupName) WHERE users_usergroups.groupName IS NULL LIMIT 10;
+
+
+MariaDB [tiki]> SELECT count(*) FROM users_groups LEFT OUTER JOIN users_usergroups USING(groupName) WHERE users_usergroups.groupName IS NULL;
++----------+
+| count(*) |
++----------+
+|    34154 |
++----------+
+1 row in set (10.584 sec)
+
+
+MariaDB [tiki]> select count(*) from users_groups;
++----------+
+| count(*) |
++----------+
+|     2271 |
++----------+
+1 row in set (0.001 sec)
+
+SELECT page_id, pageName FROM tiki_pages LEFT OUTER JOIN users_users ON (tiki_pages.creator = users_users.userid) WHERE users_users.userId IS NULL LIMIT 10;
+
+delete from tiki_pages where page_id>2631 and pagename like 'UserPage%';
+

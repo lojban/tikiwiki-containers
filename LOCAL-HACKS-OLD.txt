@@ -1,0 +1,438 @@
+Below are all the diffs between the old copy of our TikiWiki source and
+upstream.  Most of them are bug fixes, but the JVS hack is
+definitely not.
+
+This was used to make it so that bits like "{jvsv klama}" would be
+replaced with the jbovlast definition or klama, or something like
+that?, I'm honestly not even sure anymore.  Leaving it here in case
+it's needed for some future data mining.
+
+Here's the wiki plugin itself:
+
+-------------------
+
+rlpowell@jukni> cat lib/wiki-plugins/wikiplugin_jvs.php
+<?php
+
+function wikiplugin_jvs_help() {
+        return "Puts a jbovlaste link in the current page.
+        ~pp~
+        EXAMPLE: {JVS(valsi=>bolci/nlw=>ball,lang=>English)}a ball{JVS}
+
+        USAGE: {JVS(
+                valsi=>word             A valsi to link to; contradicts with nlw
+                nlw=>word               A natlang word to link to; contradicts with valsi
+                meaning=>text           Restrict to just the natlang word with this meaning specifier
+                lang=>language          Which jbovlaste languge to link to, if
+                                                not the language of the wiki page
+                general=>1              general link instead of preferred link
+                nolang=>1               specify no language (only makes sense for valsi)
+                                        UNIMPLEMENTED d: list only the definition line for the preferred definition
+                                        UNIMPLEMENTED g: list only the gloss word for the preferred definition
+                                        UNIMPLEMENTED p: Makes a set of links to the place
+                                                keywords for the preferred definition
+                                                of the valsi
+                                        UNIMPLEMENTED N: (N is a single-digit number) Make a
+                                                link to the given place kewyord for the
+                                                preferred definition of the valsi
+        )}
+                yourlinktext            the text of the link; optional, defaults to valsi/nlw argument
+         {JVS}
+
+        HACK: All of the above has been hacked locally to work like {jvsv bolci} or {jvsn ball},
+                depending on whether you are linking to a valsi or a natlang word, resp.
+                Arguments are given as above, but with = instead of =>.  In addition, use
+                label=\"...\" to rename the link from the default of the word itself.
+ ~/pp~
+         ";
+}
+
+function wikiplugin_jvs($data, $params)
+{
+        global $multilinguallib;
+        if( ! isset( $multilinguallib ) || !is_object($multilinguallib) ) {
+                include_once('lib/multilingual/multilinguallib.php');// must be done even in feature_multilingual not set
+        }
+        global $tikilib;
+        global $feature_multilingual;
+        global $feature_best_language;
+        extract ($params, EXTR_SKIP);
+
+        if( ! isset( $lang ) )
+        {
+                $page=$_REQUEST['page'];
+                $info = $tikilib->get_page_info($page);
+                $lang = $info['lang'];
+        }
+
+        // If it's *still* not set, call it English
+        if( ! isset( $lang ) )
+        {
+                print "<pre>Please set the language for any page using the JVS hack!</pre>\n";
+                $lang=en;
+        }
+        //print "lang: $lang.\n";
+
+        $args=array();
+        $url='';
+        $found='';
+
+        if( ! ( isset( $general ) && $general ) )
+        {
+                $args[]="bg=1";
+        }
+
+        if( isset( $valsi ) )
+        {
+                $found=`/bin/grep "^$valsi$" /srv/jbovlaste/words/valsi`;
+                $url="<a href=\"http://jbovlaste.lojban.org/dict/$valsi";
+                if( ! ( isset( $nolang ) && $nolang ) )
+                {
+                        $args[]="langarg=$lang";
+                }
+        }
+        if( isset( $nlw ) )
+        {
+                $found=`/bin/grep "^$nlw:$lang$" /srv/jbovlaste/words/nlw`;
+                $url="<a href=\"http://jbovlaste.lojban.org/natlang/$lang/$nlw";
+                if( isset( $meaning ) )
+                {
+                        $args[]="meaning=$meaning";
+                }
+        }
+
+        if( ! empty( $args ) )
+        {
+                $url.="?".join("&", $args);
+        }
+
+        $url.="\"";
+
+        if( ! $found )
+        {
+                $url.='style="color: red;"';
+        }
+
+        $url.=">$data";
+
+        # We didn't find the word as currently existing
+        if( ! $found )
+        {
+                $url.="?";
+        }
+
+        $url.="</a>";
+        return $url;
+
+#       if( isset($pagename) && $pagename ) {
+#               // Stolen, with some modifications, from tikilib.php line 4717-4723
+#               if( $desc = $tikilib->page_exists_desc($pagename) )
+#               {
+#                       // to choose the best page language
+#                       $bestLang = ($feature_multilingual == 'y' && $feature_best_language == 'y')? "&amp;bl" : "";
+#                       // $bestLang = $feature_best_language == 'y' ? "&amp;bl" : "";
+#
+#                       return "<a title=\"$desc\" href='tiki-index.php?page=" . urlencode($pagename) .
+#                               $bestLang .  "#" . $aname .  "' class='wiki'>$data</a>";
+#               } else {
+#                       return $data . '<a href="tiki-editpage.php?page=' . urlencode($pagename) .
+#                               '" title="' . tra("Create page:") . ' ' . urlencode($pagename) .
+#                               '"  class="wiki wikinew">?</a>';
+#               }
+#
+#       } else {
+#               return "<A HREF=\"#$aname\">$data</A>";
+#       }
+}
+
+?>
+
+-------------------
+
+And here's the diffs:
+
+-------------------
+
+--- lang/flagmapping.php        (revision 31859)
++++ lang/flagmapping.php        (working copy)
+@@ -47,4 +47,6 @@
+     'uk'       => array('Ukraine'),
+     'cy'       => array('Wales'),
+     'vi'       => array('Viet_Nam'),
++
++    'jbo'       => array(  ''),
+ );
+
+Index: lang/langmapping.php
+===================================================================
+--- lang/langmapping.php        (revision 31859)
++++ lang/langmapping.php        (working copy)
+@@ -19,11 +19,10 @@
+     'da' => array(  'Dansk',        tra("Danish")       ),
+     'de' => array(  'Deutsch',      tra("German")       ),
+     'en' => array(  'English',      tra("English")      ),
+-    'en-uk' => array( 'English British',  tra("English British")       ),
+     'es' => array(  'Español',     tra("Spanish")      ),
+     'el' => array(  'Greek',        tra("Greek")        ),
+     'fa' => array(  'فارسي',        tra("Farsi")        ),
+-    'fi' => array(  'Finnish',        tra("Finnish")        ),
++    'fi' => array(  'Suomi',        tra("Finnish")        ),
+     'fj' => array(  'Fijian',       tra("Fijian")      ),
+     'fr' => array(  'Français',    tra("French")       ),
+     'fy-NL' => array(  'Frisian Netherlands',    tra("Frisian Netherlands")       ),
+@@ -33,15 +32,17 @@
+     'id' => array(  'Indonesian',     tra("Indonesian")      ),
+     'is' => array(  'Íslenska',     tra("Icelandic")      ),
+     'it' => array(  'Italiano',     tra("Italian")      ),
+-    'iu' => array(  'ᐃᓄᒃᑎᑐᑦ',     tra("Inuktitut")      ),
++    'jbo' => array(  'lojban.',     tra("Lojban")      ),
+     'ja' => array(  '日本語',    tra("Japanese")     ),
+     'ko' => array(  '한국어',    tra("Korean")   ),
+     'hu' => array(  'Magyar',   tra("Hungarian")   ),
++    'hi' => array(  'हिन्दी',   tra("Hindi")   ),
++    'kn' => array(  'ಕನ್ನಡ',   tra("Kannada")  ),
+     'lt' => array(  'Lithuanian',   tra("Lithuanian")   ),
+     'nl' => array(  'Nederlands',   tra("Dutch")        ),
+     'no' => array(  'Norwegian',    tra("Norwegian")    ),
+     'nn-NO' => array(  'Norwegian Nynorsk',    tra("Norwegian Nynorsk")    ),
+-    'pl' => array(  'Polish',       tra("Polish")       ),
++    'pl' => array(  'Polski',       tra("Polish")       ),
+     'pt' => array(  'Portuguese',       tra("Português")       ),
+     'pt-br' => array(  'Português Brasileiro',  tra("Brazilian Portuguese")  ),
+     'ro' => array(  'Romanian',      tra("Romanian")      ),
+
+--- lib/admin/adminlib.php      (revision 31859)
++++ lib/admin/adminlib.php      (working copy)
+@@ -371,9 +371,10 @@
+                $result = $this->query($query,array());
+
+                while ($res = $result->fetchRow()) {
++set_time_limit(300);
+                        $pageName = $res["pageName"] . '.html';
+
+-                       $dat = $this->parse_data($res["data"]);
++                       $dat = $this->parse_data($res["data"], array('noparseplugins' => true));
+                        // Now change index.php?page=foo to foo.html
+                        // and index.php to HomePage.html
+                        $dat = preg_replace("/tiki-index.php\?page=([^\'\"\$]+)/", "$1.html", $dat);
+
+
+--- lib/tikilib.php     (revision 31859)
++++ lib/tikilib.php     (working copy)
+@@ -3831,7 +3831,7 @@
+                                                if (!$global) {
+                                                        $perms = $userlib->get_permissions(0, -1, 'permName_desc', '', $this->get_permGroup_from_objectType($objectType));
+                                                        foreach ($perms['data'] as $perm) {
+-                                                               global $$perm['permName'];
++                                                               global $perm;
+                                                                if ($perm['permName'] == 'tiki_p_view' || $perm['permName'] == 'tiki_p_edit') {
+                                                                        $ret[$perm['permName']] = 'y';
+                                                                } else {
+@@ -5772,6 +5772,98 @@
+
+                if (empty($options['ck_editor'])) $options['ck_editor'] = false;
+
++
++       // *********************************************
++       // START OF JVS local hack; DO NOT DISTRIBUTE
++       // *********************************************
++       // JVS local hack; DO NOT DISTRIBUTE
++       // *********************************************
++       preg_match_all("/(\{jvs[vn] [^\}]+})/", $data, $pages);
++
++       foreach (array_unique($pages[1])as $page_parse) {
++               //print "<pre>pparse: $page_parse\n</pre>";
++               $parts = $this->split_tag( $page_parse, FALSE);
++
++               $type='';
++               $repl='';
++               $args=array();
++               $data_bit='';
++
++               foreach( $parts as $part )
++               {
++                       $part = str_replace('}', '', $part);
++                       $part = str_replace('{', '', $part);
++                       $part = str_replace('"', '', $part);
++                       //print "<pre>prat: $part\n</pre>";
++
++                       if( $part == 'jvsv' )
++                       {
++                               $type = 'valsi';
++                               continue;
++                       }
++
++                       if( $part == 'jvsn' )
++                       {
++                               $type = 'nlw';
++                               continue;
++                       }
++
++                       if( strpos( $part, "label=" ) === 0 )
++                       {
++                               //print "<pre>label: $part.</pre>\n";
++                               $data_bit=str_replace( "label=", "", $part );
++                               continue;
++                       }
++
++                       if( strpos( $part, "lang=" ) === 0 ||
++                               strpos( $part, "nolang=" ) === 0 ||
++                               strpos( $part, "meaning=" ) === 0 ||
++                               strpos( $part, "general=" ) === 0
++                       )
++                       {
++                               //print "<pre>special: $part.</pre>\n";
++                               $args[] = $part;
++                               continue;
++                       }
++
++                       // If we've gotten this far, we must be getting the word itself.
++
++                       //print "<pre>type for $part is $type.</pre>\n";
++
++                       if( ! $data_bit )
++                       {
++                               $data_bit = $part;
++                       }
++
++                       if( $type == 'valsi' )
++                       {
++                               $args[] = "valsi=>$part";
++                       }
++
++                       if( $type == 'nlw' )
++                       {
++                               $args[] = "nlw=>$part";
++                       }
++
++                       $type='';
++               }
++
++               $argstr = join( ",", $args );
++
++               $repl="{JVS($argstr)}$data_bit{JVS}";
++               //print "<pre>repl: $repl.</pre>";
++
++               $data = str_replace($page_parse, $repl, $data);
++
++       }
++       // *********************************************
++       // JVS local hack; DO NOT DISTRIBUTE
++       // *********************************************
++       // END OF JVS local hack; DO NOT DISTRIBUTE
++       // *********************************************
++
++
++
+                $old_wysiwyg_parsing = null;
+                if ($options['ck_editor']) {
+                        global $headerlib;
+@@ -6660,7 +6752,7 @@
+                                                $hideall = false;
+                                                for ( $j = $hdrlevel ; $j > 0 ; $j-- ) {
+                                                        if ( $hideall || ! $show_title_level[$j] ) {
+-                                                               unset($hdr_structure[$nb_hdrs][$j - 1]);
++                                                               // unset($hdr_structure[$nb_hdrs][$j - 1]);
+                                                                $hideall = true;
+                                                        }
+                                                }
+
+--- lib/userslib.php    (revision 31859)
++++ lib/userslib.php    (working copy)
+@@ -3380,7 +3380,7 @@
+        }
+        function update_expired_groups() {
+                global $tikilib;
+-               $query = 'SELECT uu.* FROM `users_usergroups` uu, `users_groups` ug WHERE ( uu.`groupName`= ug.`groupName` AND ug.`expireAfter` > ? AND uu.`created` IS NOT NULL AND uu.`expire` is NULL AND uu.`created` + ug.`expireAfter`*24*60*60 < ?) OR (ug.`expireAfter` = ? AND uu.`expire` < ?)';
++               $query = 'SELECT uu.* FROM `users_usergroups` uu, `users_groups` ug WHERE ( uu.`groupName`= ug.`groupName` AND ug.`expireAfter` > ? AND uu.`created` IS NOT NULL AND uu.`expire` is NULL AND uu.`created` + ug.`expireAfter`*24*60*60 < ?) OR ( uu.`groupName`= ug.`groupName` AND ug.`expireAfter` = ? AND uu.`expire` < ?)';
+                $result = $this->query($query, array(0, $tikilib->now, 0, $tikilib->now ));
+                $query = 'DELETE FROM `users_usergroups` WHERE `groupName`=? AND `userId`=?';
+                while ($res = $result->fetchrow()) {
+
+-------------------
+
+And here's a few more interesting files:
+
+-------------------
+
+rlpowell@jukni> cat lang/jbo/index.php
+<?php
+
+// $Id: /cvsroot/tikiwiki/tiki/lang/ar/index.php,v 1.3.2.1 2007-11-04 22:08:08 nyloth Exp $
+
+// Copyright (c) 2002-2007, Luis Argerich, Garland Foster, Eduardo Polidor, et. al.
+// All Rights Reserved. See copyright.txt for details and a complete list of authors.
+// Licensed under the GNU LESSER GENERAL PUBLIC LICENSE. See license.txt for details.
+
+// This redirects to the sites root to prevent directory browsing
+
+header ("location: ../../tiki-index.php");
+die;
+rlpowell@jukni> cat lang/jbo/language.php
+<?php // -*- coding:utf-8 -*-
+// Parameters:
+
+// lang=xx    : only translates language 'xx',
+//              if not given all languages are translated
+
+// comments   : generate all comments (equal to close&module)
+
+// close      : look for similar strings that are already translated and
+//              generate a comment if a 'match' is made
+
+// module     : generate comments that describe in which .php and/or .tpl
+//              module(s) a certain string was found (useful for checking
+//              translations in context)
+
+// patch      : looks for the file 'language.patch' in the same directory
+//              as the corresponding language.php and overrides any strings
+//              in language.php - good if a user does not agree with
+//              some translations or if only changes are sent to the maintainer
+
+// spelling   : generates a file 'spellcheck_me.txt' that contains the
+//              words used in the translation. It is then easy to check this
+//              file for spelling errors (corrections must be done in
+//              'language.php, however)
+
+// groupwrite : Sets the generated files permissions to allow the generated
+//              language.php also be group writable. This is good for
+//              translators if they do not have root access to tiki but
+//              are in the same group as the webserver. Please remember
+//              to have write access removed when translation is finished
+//              for security reasons. (Run script again without this
+//              parameter)
+
+// Examples:
+// http://www.neonchart.com/get_strings.php?lang=sv
+// Will translate language 'sv' and (almost) avoiding comment generation
+
+// http://www.neonchart.com/get_strings.php?lang=sv&comments
+// Will translate language 'sv' and generate all possible comments.
+// This is the most usefull mode when working on a translation.
+
+// http://www.neonchart.com/get_strings.php?lang=sv&nohelp&nosections
+// These options will only provide the minimal amout of comments.
+// Usefull mode when preparing a translation for distribution.
+
+// http://www.neonchart.com/get_strings.php?nohelp&nosections
+// Prepare all languages for release
+
+
+// ### Note for translators about translation of text ending with punctuation
+// ###
+// ### The current list of concerned punctuation can be found in 'lib/init/tra.php'
+// ### On 2009-03-02, it is: (':', '!', ';', '.', ',', '?')
+// ### For clarity, we explain here only for colons: ':' but it is the same for the rest
+// ###
+// ### Short version: it is not a problem that string "Login:" has no translation. Only "Login" needs to be translated.
+// ###
+// ### Technical justification:
+// ### If a string ending with colon needs translating (like "{tr}Login:{/tr}")
+// ### then TikiWiki tries to translate 'Login' and ':' separately.
+// ### This allows to have only one translation for "{tr}Login{/tr}" and "{tr}Login:{/tr}"
+// ### and it still allows to translate ":" as "&nbsp;:" for languages that
+// ### need it (like french)
+
+$lang=Array(
+"###end###"=>"###end###");
+rlpowell@jukni>
