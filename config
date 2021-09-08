@@ -1,2 +1,2 @@
-service=jbo-tikiwiki
+bundle=jbo-tikiwiki
 pod_args='-p 19580:80'
