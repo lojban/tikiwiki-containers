@@ -18,7 +18,7 @@ MAILTO=webmaster@lojban.org
 4 4 * * * <%= maindir %>/cron/cron-run-inside.sh db /usr/local/bin/mysql_backup.sh
 
 # Daily backups
-11 11 * * * <%= maindir %>/self_backup.sh zh1785@zh1785.rsync.net '+%j'
+11 11 * * * <%= maindir %>/self_backup.sh zh1785@zh1785.rsync.net '+\%j'
 
 # Daily restore test
 12 12 * * * <%= maindir %>/self_restore_test.sh zh1785@zh1785.rsync.net webmaster@lojban.org
